@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Notes</title>
+    <link rel="stylesheet" href="./styles/index.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script type="module" src="./src/index.js"></script>
+    <script src="./src/utils/sw-registration.js"></script>
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="header">
+        <button class="sidebar-toggle" id="sidebarToggle">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+        <h1 class="header__title"><i class="fa-brands fa-apple"></i> Notes</h1>
+        <div class="header__search-container">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" class="header__search" placeholder="Search notes...">
+        </div>
+    </header>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <nav class="sidebar__nav">
+            <ul>
+                <li class="sidebar__item sidebar__item--active" data-section="notes">
+                    <i class="fa-regular fa-note-sticky"></i> Notes
+                </li>
+                <li class="sidebar__item" data-section="trash">
+                    <i class="fa-regular fa-trash-can"></i> Trash
+                </li>
+            </ul>
+        </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="content">
+        <!-- Pinned Notes Section -->
+        <h2 class="section-title" id="pinnedNotesTitle">Pinned Notes</h2>
+        <div class="notes-container" id="pinnedNotesContainer"></div>
+        <!-- Notes Section -->
+        <h2 class="section-title" id="myNotesTitle">My Notes</h2>
+        <div class="notes-container" id="notesContainer">
+            <!-- Notes will be dynamically added here -->
+        </div>
+    </main>
+
+    <!-- Create Note Modal -->
+    <div class="modal" id="noteModal">
+        <div class="modal__content">
+            <h2>Add Note</h2>
+            <input type="text" id="noteTitle" placeholder="Title">
+            <textarea id="noteText" placeholder="Enter your note..."></textarea>
+            <div class="modal__buttons">
+                <button id="saveNoteBtn">Save</button>
+                <button id="cancelNoteBtn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+
+
+
+    <!-- Floating Add Button -->
+    <button class="add-note-btn" id="addNoteBtn">+</button>
+
+
+    <!-- Fullscreen Note Modal -->
+    <div class="fullscreen-note" id="fullscreenNote">
+        <div class="fullscreen-note__content">
+            <h2 id="fullscreenTitle"></h2>
+            <p id="fullscreenDescription"></p>
+            <button id="closeFullscreenNote">Close</button>
+        </div>
+    </div>
+
+
+    <!-- Delete confirmation modal -->
+    <div id="confirmationModal" class="modal">
+        <div class="modal__content">
+            <h2>Confirm Deletion</h2>
+            <p>Are you sure you want to permanently delete this note? This action cannot be undone.</p>
+            <div class="modal__actions">
+                <button id="confirmDeleteBtn">Delete Permanently</button>
+                <button id="cancelDeleteBtn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+</body>
+
+</html>
