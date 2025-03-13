@@ -1,7 +1,8 @@
-import { SERVER_URL } from "../../mocks/handlers.js";
+import { apiService } from '../services/api-service.js';
+import { networkService } from '../services/utils-service.js';
+
 class NotesModel {
     constructor() {
-        this.SERVER_URL = SERVER_URL;
         this.notes = [];
         this.trashNotes = [];
         this.isOnline = navigator.onLine;
@@ -9,59 +10,80 @@ class NotesModel {
     }
 
     setupOnlineListener() {
-        window.addEventListener('online', () => {
-            this.isOnline = true;
-            this.syncWithServer();
+        networkService.addStatusListener((isOnline) => {
+            const wasOffline = !this.isOnline && isOnline;
+            this.isOnline = isOnline;
+            
+            // Only sync when coming back online from offline state
+            if (wasOffline) {
+                this.syncWithServer();
+            }
         });
-        window.addEventListener('offline', () => this.isOnline = false);
     }
 
     async loadNotes() {
         try {
-            if (this.isOnline) {
-                const response = await fetch(`${this.SERVER_URL}/notes`);
-                const data = await response.json();
-                this.notes = data.notes;
-                localStorage.setItem('notes', JSON.stringify(this.notes));
-            } else {
-                const storedNotes = localStorage.getItem('notes');
-                if (storedNotes) this.notes = JSON.parse(storedNotes);
+            // Return existing notes from memory when offline
+            if (!this.isOnline) {
+                // Only load from localStorage if memory is empty
+                if (this.notes.length === 0) {
+                    const storedNotes = localStorage.getItem('notes');
+                    if (storedNotes) this.notes = JSON.parse(storedNotes);
+                }
+                return this.notes;
             }
+            
+            // Fetch from API when online
+            const notes = await apiService.getNotes();
+            this.notes = notes;
+            localStorage.setItem('notes', JSON.stringify(this.notes));
             return this.notes;
         } catch (error) {
             console.error('Error loading notes:', error);
-            const storedNotes = localStorage.getItem('notes');
-            if (storedNotes) this.notes = JSON.parse(storedNotes);
+            // If API fails, use in-memory notes or fall back to localStorage
+            if (this.notes.length === 0) {
+                const storedNotes = localStorage.getItem('notes');
+                if (storedNotes) this.notes = JSON.parse(storedNotes);
+            }
             return this.notes;
         }
     }
 
     async loadTrash() {
         try {
-            if (this.isOnline) {
-                const response = await fetch(`${this.SERVER_URL}/trash`);
-                const data = await response.json();
-                this.trashNotes = data.notes;
-                localStorage.setItem('trashNotes', JSON.stringify(this.trashNotes));
-            } else {
+            // Return existing trash from memory when offline
+            if (!this.isOnline) {
+                // Only load from localStorage if memory is empty
+                if (this.trashNotes.length === 0) {
+                    const storedTrash = localStorage.getItem('trashNotes');
+                    if (storedTrash) this.trashNotes = JSON.parse(storedTrash);
+                }
+                return this.trashNotes;
+            }
+            
+            // Fetch from API when online
+            const trashNotes = await apiService.getTrashNotes();
+            this.trashNotes = trashNotes;
+            localStorage.setItem('trashNotes', JSON.stringify(this.trashNotes));
+            return this.trashNotes;
+        } catch (error) {
+            console.error('Error loading trash:', error);
+            // If API fails, use in-memory trash or fall back to localStorage
+            if (this.trashNotes.length === 0) {
                 const storedTrash = localStorage.getItem('trashNotes');
                 if (storedTrash) this.trashNotes = JSON.parse(storedTrash);
             }
             return this.trashNotes;
-        } catch (error) {
-            console.error('Error loading trash:', error);
-            const storedTrash = localStorage.getItem('trashNotes');
-            if (storedTrash) this.trashNotes = JSON.parse(storedTrash);
-            return this.trashNotes;
         }
     }
 
-    async addNote(title, text) {
+    async addNote(title, text, isRichText = false) {
         const newNote = {
             id: Date.now(),
             title,
             text,
-            pinned: false
+            pinned: false,
+            isRichText: isRichText
         };
 
         this.notes.push(newNote);
@@ -69,11 +91,16 @@ class NotesModel {
 
         if (this.isOnline) {
             try {
-                await fetch(`${this.SERVER_URL}/notes`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ title, text })
-                });
+                const createdNote = await apiService.createNote({ title, text, isRichText });
+                if (createdNote) {
+                    // Replace the temporary note with the one from the server
+                    const index = this.notes.findIndex(note => note.id === newNote.id);
+                    if (index !== -1) {
+                        this.notes[index] = createdNote;
+                        localStorage.setItem('notes', JSON.stringify(this.notes));
+                    }
+                    return createdNote;
+                }
             } catch (error) {
                 console.error('Error saving note to server:', error);
             }
@@ -91,11 +118,7 @@ class NotesModel {
 
         if (this.isOnline) {
             try {
-                await fetch(`${this.SERVER_URL}/notes/${id}`, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(updates)
-                });
+                await apiService.updateNote(id, updates);
             } catch (error) {
                 console.error('Error updating note on server:', error);
             }
@@ -113,11 +136,7 @@ class NotesModel {
 
         if (this.isOnline) {
             try {
-                await fetch(`${this.SERVER_URL}/notes/${id}`, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pinned: note.pinned })
-                });
+                await apiService.updateNote(id, { pinned: note.pinned });
             } catch (error) {
                 console.error('Error updating pin status on server:', error);
             }
@@ -139,9 +158,7 @@ class NotesModel {
 
         if (this.isOnline) {
             try {
-                await fetch(`${this.SERVER_URL}/notes/${id}/trash`, {
-                    method: 'POST'
-                });
+                await apiService.moveToTrash(id);
             } catch (error) {
                 console.error('Error moving note to trash on server:', error);
             }
@@ -162,9 +179,7 @@ class NotesModel {
 
         if (this.isOnline) {
             try {
-                await fetch(`${this.SERVER_URL}/trash/${id}/restore`, {
-                    method: 'POST'
-                });
+                await apiService.restoreFromTrash(id);
             } catch (error) {
                 console.error('Error restoring note from trash on server:', error);
             }
@@ -182,9 +197,7 @@ class NotesModel {
 
         if (this.isOnline) {
             try {
-                await fetch(`${this.SERVER_URL}/trash/${id}`, {
-                    method: 'DELETE'
-                });
+                await apiService.deletePermanently(id);
             } catch (error) {
                 console.error('Error permanently deleting note on server:', error);
             }
@@ -194,16 +207,17 @@ class NotesModel {
     }
 
     async updateNoteOrder(notesArray) {
+        // Extract just the IDs from the full notes for storage optimization
+        const noteIds = notesArray.map(note => note.id);
+        
+        // Update in-memory notes array
         this.notes = notesArray;
         localStorage.setItem('notes', JSON.stringify(this.notes));
 
         if (this.isOnline) {
             try {
-                await fetch(`${this.SERVER_URL}/notes/sync`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ notes: this.notes })
-                });
+                // Just send the IDs array instead of the full notes
+                await apiService.updateNoteOrder(noteIds);
             } catch (error) {
                 console.error('Error syncing note order with server:', error);
             }
@@ -215,11 +229,7 @@ class NotesModel {
         
         try {
             // Sync notes from local storage to server
-            await fetch(`${this.SERVER_URL}/notes/sync`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ notes: this.notes })
-            });
+            await apiService.syncNotes(this.notes);
             
             // Re-fetch the latest data
             await this.loadNotes();
@@ -233,16 +243,20 @@ class NotesModel {
         if (!query) return this.notes;
         
         const lowerQuery = query.toLowerCase();
-        return this.notes.filter(note => 
-            note.title.toLowerCase().includes(lowerQuery) || 
-            note.text.toLowerCase().includes(lowerQuery)
-        );
+        return this.notes.filter(note => {
+            // For rich text notes, create a temporary div to strip HTML tags for search
+            if (note.isRichText) {
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = note.text;
+                const textContent = tempDiv.textContent || tempDiv.innerText || '';
+                
+                return note.title.toLowerCase().includes(lowerQuery) || 
+                       textContent.toLowerCase().includes(lowerQuery);
+            } else {
+                return note.title.toLowerCase().includes(lowerQuery) || 
+                       note.text.toLowerCase().includes(lowerQuery);
+            }
+        });
     }
 }
-
 export default NotesModel;
-
-
-
-
-
