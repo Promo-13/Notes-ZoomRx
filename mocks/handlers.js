@@ -1,4 +1,3 @@
-// handlers.js - API mock handlers for testing
 import { http, HttpResponse } from "msw";
 
 export const SERVER_URL = "http://localhost:5070";
@@ -26,6 +25,7 @@ export const handlers = [
             title: requestBody.title,
             text: requestBody.text,
             pinned: false,  // Ensure pinned property exists
+            isRichText: requestBody.isRichText || false // Add rich text flag
         };
         notes.push(newNote);
         return HttpResponse.json({ success: true, note: newNote });
@@ -48,6 +48,9 @@ export const handlers = [
         if (requestBody.pinned !== undefined) {
             note.pinned = requestBody.pinned;
         }
+        if (requestBody.isRichText !== undefined) {
+            note.isRichText = requestBody.isRichText;
+        }
 
         return HttpResponse.json({ success: true, note });
     }),
@@ -63,8 +66,8 @@ export const handlers = [
         return HttpResponse.json({ success: true });
     }),
 
-    // Move to trash
-    http.post(`${SERVER_URL}/notes/:id/trash`, async ({ request, params, cookies }) => {
+    // Move to trash - Changed from POST to PATCH as requested
+    http.patch(`${SERVER_URL}/notes/:id/trash`, async ({ request, params, cookies }) => {
         const noteId = Number(params.id);
         const noteIndex = notes.findIndex((n) => n.id === noteId);
         if (noteIndex === -1) {
@@ -109,13 +112,47 @@ export const handlers = [
         return HttpResponse.json({ success: true });
     }),
 
-    // Sync notes (for offline mode)
+    // Sync notes (for offline mode) - Updated to handle IDs only
     http.post(`${SERVER_URL}/notes/sync`, async ({ request, params, cookies }) => {
         const responseBody = await request.json();
-        if (!responseBody.notes || !Array.isArray(responseBody.notes)) {
-            return HttpResponse.json({ error: "No notes provided for sync" }, { status: 400 });
+        
+        // Handle reordering by IDs only
+        if (responseBody.noteIds && Array.isArray(responseBody.noteIds)) {
+            // Reorder notes based on the IDs provided
+            const orderedNotes = [];
+            const noteIds = responseBody.noteIds;
+            
+            // First, add all pinned notes (maintain their order)
+            const pinnedNotes = notes.filter(note => note.pinned);
+            orderedNotes.push(...pinnedNotes);
+            
+            // Then add unpinned notes in the order specified by noteIds
+            for (const id of noteIds) {
+                const note = notes.find(n => n.id === id && !n.pinned);
+                if (note) {
+                    orderedNotes.push(note);
+                }
+            }
+            
+            // Add any remaining notes not included in noteIds
+            const remainingNotes = notes.filter(note => 
+                !note.pinned && !noteIds.includes(note.id)
+            );
+            orderedNotes.push(...remainingNotes);
+            
+            notes = orderedNotes;
+            return HttpResponse.json({ success: true });
         }
-        notes = responseBody.notes;
-        return HttpResponse.json({ success: true });
+        
+        // Handle full note sync
+        if (responseBody.notes && Array.isArray(responseBody.notes)) {
+            notes = responseBody.notes;
+            return HttpResponse.json({ success: true });
+        }
+        
+        return HttpResponse.json(
+            { error: "Invalid sync data. Either notes or noteIds array must be provided" }, 
+            { status: 400 }
+        );
     }),
 ];

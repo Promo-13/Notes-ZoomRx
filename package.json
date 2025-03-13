@@ -9,12 +9,17 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --experimental-vm-modules node_modules/mocha/bin/mocha.js --require tests/setup.js tests/**/*.test.js"
   },
   "dependencies": {
     "msw": "^2.7.0"
   },
   "devDependencies": {
+    "chai": "^5.2.0",
+    "jsdom": "^26.0.0",
+    "mocha": "^11.1.0",
+    "sinon": "^19.0.2",
     "vite": "^6.1.0"
   },
   "msw": {
